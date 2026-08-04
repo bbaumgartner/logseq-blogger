@@ -1,4 +1,9 @@
-# Machine-specific configuration. Copy to config.local.yaml (gitignored) and adjust paths.
+# Copy to config.local.yaml (gitignored) and fill in real values.
+#
+# Local client extracts the diary, uploads immutable originals under
+# <base>/<slug>/source/, and fires the n8n webhooks. Media adaptation (Edit Image
+# + OpenAI crop-focus for stills; pyautoflip saliency sidecar for reels),
+# translation, captions and Hugo render live in n8n.
 
 # Logseq graph root (contains journals/ and pages/).
 logseq_dir: /path/to/logseq-graph
@@ -6,3 +11,23 @@ logseq_dir: /path/to/logseq-graph
 # Private key for the chrooted SFTP staging user (see ~/.ssh/config; the staging
 # server exposes a chrooted, key-only "sftp" user).
 sftp_key: ~/.ssh/sftp_client_ed25519
+
+site:
+  title: "My Example Blog"
+  base_url: "https://www.example.com"
+  # Language served at the site root; all others live under /<lang>/. Only used
+  # locally to build the post_url that ships in the webhook payloads.
+  default_language: en
+
+# SFTP staging area. Client writes immutable originals under <base>/<slug>/source/;
+# n8n builds hugo-site/content/posts/<slug>/ and social derivatives from
+# slug + basenames in the webhook contracts (see syndicator README).
+sftp:
+  host: staging.example.com
+  port: 22
+  user: sftp
+  base_dir: /syndicator
+
+webhooks:
+  publish_url: "https://n8n.example.com/webhook/publish"
+  reel_url: "https://n8n.example.com/webhook/reel"

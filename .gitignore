@@ -219,6 +219,5 @@ __marimo__/
 
 # Machine-specific configuration and secrets
 config.local.yaml
-logseq-blogger.yaml
 .env
 .venv/

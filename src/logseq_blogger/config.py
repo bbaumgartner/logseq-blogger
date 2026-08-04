@@ -1,4 +1,4 @@
-"""Load shared + local YAML config into plain dataclasses."""
+"""Load YAML config into plain dataclasses."""
 
 from __future__ import annotations
 
@@ -102,18 +102,16 @@ def local_from_dict(data: dict) -> LocalConfig:
 
 def load_config(repo_root: Path | None = None) -> Config:
     root = repo_root or REPO_ROOT
-    shared_path = root / "logseq-blogger.yaml"
-    local_path = root / "config.local.yaml"
+    path = root / "config.local.yaml"
 
-    if not shared_path.exists():
+    if not path.exists():
         raise FileNotFoundError(
-            f"missing {shared_path} — copy logseq-blogger.yaml.example and fill in host/webhooks"
-        )
-    if not local_path.exists():
-        raise FileNotFoundError(
-            f"missing {local_path} — copy config.local.yaml.example and adjust paths"
+            f"missing {path} — copy config.local.yaml.example and fill in values"
         )
 
-    shared = shared_from_dict(yaml.safe_load(shared_path.read_text()) or {})
-    local = local_from_dict(yaml.safe_load(local_path.read_text()) or {})
-    return Config(shared=shared, local=local, repo_root=root)
+    data = yaml.safe_load(path.read_text()) or {}
+    return Config(
+        shared=shared_from_dict(data),
+        local=local_from_dict(data),
+        repo_root=root,
+    )

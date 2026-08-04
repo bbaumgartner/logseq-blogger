@@ -139,8 +139,7 @@ git clone git@github.com:bbaumgartner/logseq-blogger.git
 cd logseq-blogger
 curl -LsSf https://astral.sh/uv/install.sh | sh   # if uv is missing
 uv sync
-cp logseq-blogger.yaml.example logseq-blogger.yaml   # SFTP host + webhook URLs
-cp config.local.yaml.example config.local.yaml       # logseq_dir + sftp_key
+cp config.local.yaml.example config.local.yaml       # paths, SFTP host, webhook URLs
 ```
 
 ## Test
