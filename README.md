@@ -40,7 +40,7 @@ The **logseq-blog** interface is the contract between a Logseq Graph and Logseq-
 
 ### Discovery
 
-Under the Logseq graph root (`saillog_dir` in `config.local.yaml`):
+Under the Logseq graph root (`logseq_dir` in `config.local.yaml`):
 
 | Path | Role |
 |------|------|
@@ -140,7 +140,7 @@ cd logseq-blogger
 curl -LsSf https://astral.sh/uv/install.sh | sh   # if uv is missing
 uv sync
 cp logseq-blogger.yaml.example logseq-blogger.yaml   # SFTP host + webhook URLs
-cp config.local.yaml.example config.local.yaml       # saillog_dir + sftp_key
+cp config.local.yaml.example config.local.yaml       # logseq_dir + sftp_key
 ```
 
 ## Test

@@ -40,7 +40,7 @@ class SharedConfig:
 
 @dataclass
 class LocalConfig:
-    saillog_dir: Path
+    logseq_dir: Path
     sftp_key: Path
 
 
@@ -52,11 +52,11 @@ class Config:
 
     @property
     def journals_dir(self) -> Path:
-        return self.local.saillog_dir / "journals"
+        return self.local.logseq_dir / "journals"
 
     @property
     def pages_dir(self) -> Path:
-        return self.local.saillog_dir / "pages"
+        return self.local.logseq_dir / "pages"
 
 
 def _site(raw: dict) -> SiteConfig:
@@ -95,7 +95,7 @@ def shared_from_dict(data: dict) -> SharedConfig:
 def local_from_dict(data: dict) -> LocalConfig:
     key = data["sftp_key"]
     return LocalConfig(
-        saillog_dir=Path(data["saillog_dir"]),
+        logseq_dir=Path(data["logseq_dir"]),
         sftp_key=Path(key).expanduser() if isinstance(key, str) else Path(key),
     )
 

@@ -8,7 +8,7 @@
 # translation, captions and Hugo render live in n8n.
 
 site:
-    title: "Sailing Nomads"
+    title: "My Example Blog"
     base_url: "https://www.example.com"
     # Language served at the site root; all others live under /<lang>/. Only used
     # locally to build the post_url that ships in the webhook payloads.

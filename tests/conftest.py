@@ -8,14 +8,14 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def make_cfg(tmp_path: Path) -> Config:
-    """Config with a temp saillog (populated from fixtures)."""
-    saillog = tmp_path / "saillog"
-    (saillog / "journals").mkdir(parents=True)
-    (saillog / "pages").mkdir(parents=True)
+    """Config with a temp Logseq graph (populated from fixtures)."""
+    logseq = tmp_path / "logseq"
+    (logseq / "journals").mkdir(parents=True)
+    (logseq / "pages").mkdir(parents=True)
     for f in (FIXTURES / "journals").glob("*.md"):
-        (saillog / "journals" / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+        (logseq / "journals" / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     for f in (FIXTURES / "pages").glob("*.md"):
-        (saillog / "pages" / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+        (logseq / "pages" / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
 
     shared = shared_from_dict(
         {
@@ -27,7 +27,7 @@ def make_cfg(tmp_path: Path) -> Config:
             },
         }
     )
-    local = LocalConfig(saillog_dir=saillog, sftp_key=tmp_path / "sftp_key")
+    local = LocalConfig(logseq_dir=logseq, sftp_key=tmp_path / "sftp_key")
     return Config(shared=shared, local=local, repo_root=tmp_path)
 
 

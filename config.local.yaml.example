@@ -1,7 +1,7 @@
 # Machine-specific configuration. Copy to config.local.yaml (gitignored) and adjust paths.
 
-# Logseq graph, synced between machines via Syncthing.
-saillog_dir: /path/to/saillog
+# Logseq graph root (contains journals/ and pages/).
+logseq_dir: /path/to/logseq-graph
 
 # Private key for the chrooted SFTP staging user (see ~/.ssh/config; the staging
 # server exposes a chrooted, key-only "sftp" user).
