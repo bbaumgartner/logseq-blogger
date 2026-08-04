@@ -1,0 +1,28 @@
+# Shared configuration. Copy to logseq-blogger.yaml (gitignored) and fill in
+# real host / webhook values. Machine-specific paths live in config.local.yaml
+# (see config.local.yaml.example).
+#
+# Local client extracts the diary, uploads immutable originals under
+# <base>/<slug>/source/, and fires the n8n webhooks. Media adaptation (Edit Image
+# + OpenAI crop-focus for stills; pyautoflip saliency sidecar for reels),
+# translation, captions and Hugo render live in n8n.
+
+site:
+    title: "Sailing Nomads"
+    base_url: "https://www.example.com"
+    # Language served at the site root; all others live under /<lang>/. Only used
+    # locally to build the post_url that ships in the webhook payloads.
+    default_language: en
+
+# SFTP staging area. Client writes immutable originals under <base>/<slug>/source/;
+# n8n builds hugo-site/content/posts/<slug>/ and social derivatives from
+# slug + basenames in the webhook contracts (see syndicator README).
+sftp:
+  host: staging.example.com
+  port: 22
+  user: sftp
+  base_dir: /syndicator
+
+webhooks:
+  publish_url: "https://n8n.example.com/webhook/publish"
+  reel_url: "https://n8n.example.com/webhook/reel"

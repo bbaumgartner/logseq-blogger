@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Machine-specific configuration and secrets
+config.local.yaml
+logseq-blogger.yaml
+.env
+.venv/
