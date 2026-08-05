@@ -6,18 +6,9 @@ Use [Logseq](https://logseq.com) as your blog editor. Write posts in your graph 
 
 ## Architecture
 
-```plantuml
-@startuml
-!theme plain
-left to right direction
-
-[Logseq Graph] as Graph
-[Logseq-Blogger] as Blogger
-[Syndicator] as Syndicator
-
-Graph -0)- Blogger: "logseq-blog"
-Blogger --(0- Syndicator: "syndicate"
-@enduml
+```
+                logseq-blog                         syndicate
+[Logseq Graph]───────○ )───────[Logseq-Blogger]───────( ○───────[Syndicator]
 ```
 Logseq-Blogger uses the `logseq-blog` interface to retrieve blog posts from a Logseq Graph and forwards these blog posts to Syndicator using the `syndicate` interface. 
 
