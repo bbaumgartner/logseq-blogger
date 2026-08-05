@@ -12,8 +12,8 @@ Use [Logseq](https://logseq.com) as your blog editor. Write posts in your graph 
 ```
 Logseq-Blogger uses the `logseq-blog` interface to retrieve blog posts from a Logseq Graph and forwards these blog posts to Syndicator using the `syndicate` interface. 
 
-* The [logseq-blog interface](#logseq-blog-interface) specified below. 
-* The `syndicator` interface specified in [syndicator](https://github.com/bbaumgartner/syndicator). 
+* The [logseq-blog interface](#logseq-blog-interface) is specified below. 
+* The `syndicator` interface is specified in [syndicator](https://github.com/bbaumgartner/syndicator). 
 
 ## Commands
 
@@ -71,18 +71,20 @@ Metadata lives in the first list item under a parent (commonly `[[Blog]]`). Sibl
 
 ```markdown
 - [[Blog]]
-  - type:: blog
-    status:: online
-    language:: german
-    date:: 2026-01-17
-    position:: Oberägeri
-    title:: Frühlingspläne 2026
-    author:: Benno
-    header:: ![alt](../assets/2026_01_17/featured.jpeg)
-  - First paragraph of content
-  - ### Section Heading
-  - More content here
-  - ![photo.jpg](../assets/2026_01_17/photo.jpg)
+	-
+	  type:: blog
+	  status:: online
+	  language:: german
+	  date:: 2026-05-19
+	  position:: 38.83388, 20.69757
+	  title:: Charly Superstar
+	  author:: Benno
+	  header:: ![charly-superstar.jpg](../assets/charly-superstar_1779210265357_0.jpg)
+	  syndicated-at:: 2026-08-03T11:27:19+02:00
+	- Wie die meisten Hündeler glauben auch wir: unser Hund ist der schönste und liebste der Welt.
+	- ![charly-drinkt.mp4](../assets/charly-drinkt_1785678123966_0.mp4)
+	- Charly scheint aber wirklich eine besondere Wirkung auf die Menschen zu haben.
+	- {{video https://youtube.com/shorts/_yNn9MUXBaw}}
 ```
 
 - Properties are indented under the `type:: blog` bullet
@@ -97,17 +99,17 @@ Properties at the top of the file; body as list items below.
 ```markdown
 type:: blog
 status:: online
-language:: english
-date:: 2024-06-14
-position:: 38.98000,1.430000
-title:: Renan
+language:: german
+date:: 2026-05-19
+position:: 38.83388, 20.69757
+title:: Charly Superstar
 author:: Benno
-header:: ![image](../assets/Renan/renand.jpg)
-
-- First paragraph of content
-- ### Section Heading
-- ![photo.jpg](../assets/Renan/photo.jpg)
-- More content
+header:: ![charly-superstar.jpg](../assets/charly-superstar_1779210265357_0.jpg)
+syndicated-at:: 2026-08-03T11:27:19+02:00
+- Wie die meisten Hündeler glauben auch wir: unser Hund ist der schönste und liebste der Welt.
+- ![charly-drinkt.mp4](../assets/charly-drinkt_1785678123966_0.mp4)
+- Charly scheint aber wirklich eine besondere Wirkung auf die Menschen zu haben.
+- {{video https://youtube.com/shorts/_yNn9MUXBaw}}
 ```
 
 - One blog post per page file
