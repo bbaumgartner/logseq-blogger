@@ -141,3 +141,53 @@ cp config.local.yaml.example config.local.yaml       # paths, SFTP host, webhook
 uv sync --group dev
 uv run pytest
 ```
+
+## Software Design
+
+```mermaid
+classDiagram
+    direction TB
+
+    class cli {
+        entry point
+        parse commands, dispatch
+    }
+    class config {
+        load YAML → Config
+    }
+    class extract {
+        scan journals/pages → BlogPost
+    }
+    class marker {
+        read/write syndicated-at::
+    }
+    class trigger {
+        stage, upload, webhooks, mark done
+    }
+    class sftp {
+        resumable SFTP upload
+    }
+    class webhook {
+        HTTP POST /publish, /reel
+    }
+
+    cli --> config : load_config
+    cli --> trigger : syndicate / redeploy / list
+    trigger --> config
+    trigger --> extract : scan_blog_posts
+    trigger --> marker : is_syndicated / set_syndicated_at
+    trigger --> sftp : sftp_session / upload
+    trigger --> webhook : post_webhook
+    marker --> extract : BlogPost
+    sftp --> config : host, key
+```
+
+| Module | Role |
+|--------|------|
+| `cli` | Entry point: parse commands, load config, dispatch |
+| `config` | YAML → `Config` dataclasses |
+| `extract` | Scan journals/pages → `BlogPost` domain model |
+| `marker` | Read/write `syndicated-at::` on source files |
+| `trigger` | Stage, upload, fire webhooks, mark done |
+| `sftp` | Resumable SFTP upload to syndicator staging |
+| `webhook` | HTTP POST to n8n `/publish` and `/reel` |
