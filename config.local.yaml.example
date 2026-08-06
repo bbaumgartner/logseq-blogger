@@ -24,7 +24,7 @@ site:
 # slug + basenames in the webhook contracts (see syndicator README).
 sftp:
   host: staging.example.com
-  port: 22
+  port: 2222
   user: sftp
   base_dir: /syndicator
 

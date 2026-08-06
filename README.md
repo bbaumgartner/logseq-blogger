@@ -4,7 +4,7 @@ Use [Logseq](https://logseq.com) as your blog editor. Write posts in your graph 
 
 ![example.png](example.png)
 
-## Architecture
+## Context
 
 ```
                 logseq-blog                         syndicate
@@ -141,6 +141,10 @@ cp config.local.yaml.example config.local.yaml       # paths, SFTP host, webhook
 uv sync --group dev
 uv run pytest
 ```
+
+## Architecture
+
+This is a cli built with python. Simplicity and Maintainability are most important NFRs. It should just wire together various programs that do the complex things and hence, act as an orchestrator. The most complex thing this project does is parse Logseq Markdown files. That's at the very limit of acceptable complexity in this project. It was considered to pull that out into a dedicated project, however, with LLM support this complexity should be manageable, if not we can still pull it out or use a library. The runtime environment for this is Linux, Mac support is nice to have, Windows is out-of-scope.
 
 ## Software Design
 
