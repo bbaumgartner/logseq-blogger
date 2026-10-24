@@ -22,7 +22,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_syn = sub.add_parser(
         "syndicate",
-        help="Syndicate new online posts (upload source/, /reel, /publish, mark done)",
+        help="Syndicate new online posts (upload source/, /publish, /reel, mark done)",
     )
     p_syn.add_argument("--post", help="Only this post slug (default: all new online posts)")
 

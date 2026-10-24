@@ -1,4 +1,4 @@
-"""Orchestration: stage originals, upload over SFTP, fire /reel + /publish."""
+"""Orchestration: stage originals, upload over SFTP, fire /publish + /reel."""
 
 from __future__ import annotations
 
@@ -305,6 +305,29 @@ def _syndicate_one(
         staged = stage_post(post, cfg, tmp / slug, include_social=True)
         _upload_all(sftp, staged)
 
+        # /publish first so n8n runs the Hugo site build immediately; /reel
+        # is queued behind it (calling /reel first would delay the site).
+        post_webhook(
+            cfg.shared.webhooks.publish_url,
+            {
+                "slug": post.slug,
+                "meta": {
+                    "title": post.meta.title,
+                    "date": post.meta.date,
+                    "language": post.meta.language,
+                    "lang_code": post.lang_code,
+                    "author": post.meta.author,
+                    "summary": summary_for(post),
+                    "position": post.meta.position,
+                },
+                "post_url": post_url(cfg, post.slug, post.lang_code),
+                "blocks": build_blocks(post),
+                "header_source": staged.header_source or "",
+                "flags": {"redeploy": False},
+            },
+            label=f"/publish {slug}",
+        )
+
         for sv in staged.videos:
             if not sv.source_filename:
                 log.warning("%s: video %d has no source filename — skipping /reel", slug, sv.index)
@@ -329,27 +352,6 @@ def _syndicate_one(
                 },
                 label=f"/reel {slug} #{sv.index}",
             )
-
-        post_webhook(
-            cfg.shared.webhooks.publish_url,
-            {
-                "slug": post.slug,
-                "meta": {
-                    "title": post.meta.title,
-                    "date": post.meta.date,
-                    "language": post.meta.language,
-                    "lang_code": post.lang_code,
-                    "author": post.meta.author,
-                    "summary": summary_for(post),
-                    "position": post.meta.position,
-                },
-                "post_url": post_url(cfg, post.slug, post.lang_code),
-                "blocks": build_blocks(post),
-                "header_source": staged.header_source or "",
-                "flags": {"redeploy": False},
-            },
-            label=f"/publish {slug}",
-        )
 
         set_syndicated_at(post)
         report.done.append(slug)
