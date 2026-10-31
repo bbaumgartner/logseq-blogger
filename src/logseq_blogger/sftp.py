@@ -75,6 +75,47 @@ class SftpUploader:
             while chunk := src.read(_CHUNK):
                 dst.write(chunk)
 
+    def exists(self, remote: str) -> bool:
+        try:
+            self._sftp.stat(remote)
+            return True
+        except FileNotFoundError:
+            return False
+
+    def listdir(self, remote: str) -> list[str]:
+        return self._sftp.listdir(remote)
+
+    def listdir_attr(self, remote: str):
+        return self._sftp.listdir_attr(remote)
+
+    def download(self, remote_path: str, local_path: Path) -> None:
+        local_path = Path(local_path)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        self._sftp.get(remote_path, str(local_path))
+        log.info("downloaded %s -> %s", remote_path, local_path)
+
+    def download_tree(self, remote_dir: str, local_dir: Path) -> int:
+        """Recursively download ``remote_dir`` into ``local_dir`` (overlay).
+
+        Existing local files are overwritten. Local-only paths are left alone.
+        Returns the number of files downloaded.
+        """
+        local_dir = Path(local_dir)
+        local_dir.mkdir(parents=True, exist_ok=True)
+        count = 0
+        for entry in self.listdir_attr(remote_dir):
+            name = entry.filename
+            if name in (".", ".."):
+                continue
+            remote_path = str(PurePosixPath(remote_dir) / name)
+            local_path = local_dir / name
+            if stat.S_ISDIR(entry.st_mode):
+                count += self.download_tree(remote_path, local_path)
+            else:
+                self.download(remote_path, local_path)
+                count += 1
+        return count
+
 
 @contextmanager
 def sftp_session(cfg: Config) -> Iterator[SftpUploader]:

@@ -42,6 +42,9 @@ class SharedConfig:
 class LocalConfig:
     logseq_dir: Path
     sftp_key: Path
+    hugo_dir: Path
+    hugo_pull_timeout_sec: int = 3600
+    hugo_pull_poll_sec: int = 15
 
 
 @dataclass
@@ -57,6 +60,10 @@ class Config:
     @property
     def pages_dir(self) -> Path:
         return self.local.logseq_dir / "pages"
+
+    @property
+    def hugo_content_dir(self) -> Path:
+        return self.local.hugo_dir / "content"
 
 
 def _site(raw: dict) -> SiteConfig:
@@ -94,9 +101,13 @@ def shared_from_dict(data: dict) -> SharedConfig:
 
 def local_from_dict(data: dict) -> LocalConfig:
     key = data["sftp_key"]
+    hugo = data["hugo_dir"]
     return LocalConfig(
         logseq_dir=Path(data["logseq_dir"]),
         sftp_key=Path(key).expanduser() if isinstance(key, str) else Path(key),
+        hugo_dir=Path(hugo).expanduser() if isinstance(hugo, str) else Path(hugo),
+        hugo_pull_timeout_sec=int(data.get("hugo_pull_timeout_sec", 3600)),
+        hugo_pull_poll_sec=int(data.get("hugo_pull_poll_sec", 15)),
     )
 
 

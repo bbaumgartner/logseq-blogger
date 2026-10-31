@@ -24,6 +24,7 @@ def test_syndicate_reports_outcomes(tmp_path: Path, monkeypatch, capsys):
         done=["2026-05-19_Charly_Superstar"],
         skipped_marked=["2026-06-03_Athen"],
         skipped_no_header=["2026-05-28_Lefkada"],
+        hugo_pulled=True,
     )
     seen = {}
 
@@ -38,6 +39,8 @@ def test_syndicate_reports_outcomes(tmp_path: Path, monkeypatch, capsys):
     assert "done      2026-05-19_Charly_Superstar" in out
     assert "already syndicated" in out
     assert "add a header" in out
+    assert "hugo      pulled into" in out
+    assert str(cfg.hugo_content_dir) in out
 
 
 def test_syndicate_post_option_passes_slug(tmp_path: Path, monkeypatch, capsys):

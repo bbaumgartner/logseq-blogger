@@ -25,6 +25,8 @@ uv run logseq-blogger redeploy --post <slug>    # regenerate the static hugo pag
 uv run logseq-blogger version                   # print version
 ```
 
+`syndicate` uploads source media, fires the Syndicator webhooks, writes `syndicated-at::`, then waits for n8n to finish the Hugo bundle on SFTP and overlays `{base}/hugo-site/content/` into `{hugo_dir}/content/` (see `config.local.yaml`). If the wait is cancelled or times out, markers stay set — pull the remote content by hand if needed. `redeploy` does not wait or pull.
+
 ## logseq-blog interface
 
 The **logseq-blog** interface is the contract between a Logseq Graph and Logseq-Blogger. A blog post is a Logseq markdown fragment marked with `type:: blog`.
@@ -132,8 +134,10 @@ git clone git@github.com:bbaumgartner/logseq-blogger.git
 cd logseq-blogger
 curl -LsSf https://astral.sh/uv/install.sh | sh   # if uv is missing
 uv sync
-cp config.local.yaml.example config.local.yaml       # paths, SFTP host, webhook URLs
+cp config.local.yaml.example config.local.yaml       # paths, hugo_dir, SFTP host, webhook URLs
 ```
+
+Local settings in `config.local.yaml` include `logseq_dir`, `hugo_dir` (Hugo project root that receives the pulled `content/`), `sftp_key`, site URL, SFTP staging, and webhook URLs. Optional `hugo_pull_timeout_sec` (default 3600) and `hugo_pull_poll_sec` (default 15) control how long `syndicate` waits for Hugo indexes on SFTP.
 
 ## Test
 
@@ -166,10 +170,10 @@ classDiagram
         read/write syndicated-at::
     }
     class trigger {
-        stage, upload, webhooks, mark done
+        stage, upload, webhooks, mark done, pull Hugo
     }
     class sftp {
-        resumable SFTP upload
+        resumable SFTP upload/download
     }
     class webhook {
         HTTP POST /publish, /reel
@@ -180,7 +184,7 @@ classDiagram
     trigger --> config
     trigger --> extract : scan_blog_posts
     trigger --> marker : is_syndicated / set_syndicated_at
-    trigger --> sftp : sftp_session / upload
+    trigger --> sftp : sftp_session / upload / download_tree
     trigger --> webhook : post_webhook
     marker --> extract : BlogPost
     sftp --> config : host, key
@@ -192,6 +196,6 @@ classDiagram
 | `config` | YAML → `Config` dataclasses |
 | `extract` | Scan journals/pages → `BlogPost` domain model |
 | `marker` | Read/write `syndicated-at::` on source files |
-| `trigger` | Stage, upload, fire webhooks, mark done |
-| `sftp` | Resumable SFTP upload to syndicator staging |
+| `trigger` | Stage, upload, fire webhooks, mark done, wait/pull Hugo content |
+| `sftp` | Resumable SFTP upload/download to syndicator staging |
 | `webhook` | HTTP POST to n8n `/publish` and `/reel` |

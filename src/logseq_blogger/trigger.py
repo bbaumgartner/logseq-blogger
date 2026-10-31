@@ -6,6 +6,7 @@ import logging
 import re
 import shutil
 import tempfile
+import time
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +26,9 @@ YOUTUBE_ID_RE = re.compile(r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/e
 
 _KEEP_CATEGORIES = ("L", "N", "M")
 _KEEP_CHARS = set("-._")
+
+# Languages n8n writes under hugo-site/content/posts/<slug>/index.<lang>.md
+HUGO_INDEX_LANGS = ("en", "de", "es", "fr", "it", "arrr")
 
 
 # --- URL helpers -------------------------------------------------------------
@@ -105,6 +109,23 @@ def _base(cfg: Config) -> str:
 
 def source_remote(cfg: Config, slug: str, name: str) -> str:
     return f"{_base(cfg)}/{slug}/source/{name}"
+
+
+def hugo_content_remote(cfg: Config) -> str:
+    return f"{_base(cfg)}/hugo-site/content"
+
+
+def hugo_post_remote(cfg: Config, slug: str) -> str:
+    return f"{hugo_content_remote(cfg)}/posts/{slug}"
+
+
+def hugo_index_paths(cfg: Config, slug: str) -> list[str]:
+    root = hugo_post_remote(cfg, slug)
+    return [f"{root}/index.{lang}.md" for lang in HUGO_INDEX_LANGS]
+
+
+def hugo_post_ready(sftp: SftpUploader, cfg: Config, slug: str) -> bool:
+    return all(sftp.exists(path) for path in hugo_index_paths(cfg, slug))
 
 
 # --- Payload builders --------------------------------------------------------
@@ -225,6 +246,7 @@ class SyndicateReport:
     skipped_marked: list[str] = field(default_factory=list)
     skipped_no_header: list[str] = field(default_factory=list)
     failed: list[tuple[str, str]] = field(default_factory=list)
+    hugo_pulled: bool = False
 
 
 def _scan_online(cfg: Config) -> list[BlogPost]:
@@ -255,6 +277,52 @@ def _check_webhooks(cfg: Config, *, need_reel: bool) -> None:
         raise SystemExit("webhooks.reel_url is not configured in logseq_blogger.yaml")
 
 
+def wait_for_hugo_posts(sftp: SftpUploader, cfg: Config, slugs: list[str]) -> None:
+    """Poll SFTP until every slug has all Hugo index.*.md files, or time out."""
+    if not slugs:
+        return
+    timeout = cfg.local.hugo_pull_timeout_sec
+    poll = cfg.local.hugo_pull_poll_sec
+    deadline = time.monotonic() + timeout
+    pending = set(slugs)
+    log.info(
+        "waiting for Hugo site on SFTP for %d post(s) (timeout %ds, poll %ds)",
+        len(pending),
+        timeout,
+        poll,
+    )
+    while pending:
+        ready = {slug for slug in pending if hugo_post_ready(sftp, cfg, slug)}
+        if ready:
+            for slug in sorted(ready):
+                log.info("Hugo post ready: %s", slug)
+            pending -= ready
+        if not pending:
+            return
+        if time.monotonic() >= deadline:
+            missing = ", ".join(sorted(pending))
+            raise TimeoutError(
+                f"timed out after {timeout}s waiting for Hugo indexes for: {missing}"
+            )
+        time.sleep(max(poll, 0))
+
+
+def pull_hugo_content(cfg: Config, slugs: list[str]) -> int:
+    """Wait for ``slugs`` on SFTP, then overlay hugo-site/content/ into hugo_dir/content/."""
+    if not cfg.local.hugo_dir:
+        raise SystemExit("hugo_dir is not configured in config.local.yaml")
+    remote = hugo_content_remote(cfg)
+    local = cfg.hugo_content_dir
+    with sftp_session(cfg) as sftp:
+        wait_for_hugo_posts(sftp, cfg, slugs)
+        if not sftp.exists(remote):
+            raise FileNotFoundError(f"remote Hugo content missing: {remote}")
+        log.info("pulling %s -> %s", remote, local)
+        count = sftp.download_tree(remote, local)
+    log.info("pulled %d Hugo file(s) into %s", count, local)
+    return count
+
+
 def syndicate(cfg: Config, slug: str | None = None) -> SyndicateReport:
     _check_webhooks(cfg, need_reel=True)
     posts = _scan_online(cfg)
@@ -270,12 +338,25 @@ def syndicate(cfg: Config, slug: str | None = None) -> SyndicateReport:
             for post in posts:
                 _syndicate_one(cfg, sftp, post, tmp, report)
 
+    if report.done:
+        try:
+            pull_hugo_content(cfg, report.done)
+            report.hugo_pulled = True
+        except (TimeoutError, OSError, FileNotFoundError) as err:
+            log.error(
+                "Hugo pull failed after syndication — %s "
+                "(markers kept; pull hugo-site/content/ by hand if needed)",
+                err,
+            )
+            report.failed.append(("hugo-pull", str(err)))
+
     log.info(
-        "syndicate: %d done, %d already-marked, %d no-header, %d failed",
+        "syndicate: %d done, %d already-marked, %d no-header, %d failed%s",
         len(report.done),
         len(report.skipped_marked),
         len(report.skipped_no_header),
         len(report.failed),
+        ", hugo pulled" if report.hugo_pulled else "",
     )
     for s, reason in report.failed:
         log.error("  failed: %s (%s)", s, reason)

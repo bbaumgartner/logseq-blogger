@@ -8,6 +8,13 @@
 # Logseq graph root (contains journals/ and pages/).
 logseq_dir: /path/to/logseq-graph
 
+# Local Hugo project root. After /publish is accepted, syndicate waits for n8n
+# to write hugo-site/content/ on SFTP, then overlays it into <hugo_dir>/content/.
+hugo_dir: /path/to/hugo-site
+# Optional: how long to wait for Hugo indexes (default 3600s / 15s poll).
+# hugo_pull_timeout_sec: 3600
+# hugo_pull_poll_sec: 15
+
 # Private key for the chrooted SFTP staging user (see ~/.ssh/config; the staging
 # server exposes a chrooted, key-only "sftp" user).
 sftp_key: ~/.ssh/sftp_client_ed25519

@@ -22,7 +22,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_syn = sub.add_parser(
         "syndicate",
-        help="Syndicate new online posts (upload source/, /publish, /reel, mark done)",
+        help="Syndicate new online posts (upload, /publish, /reel, mark done, pull Hugo)",
     )
     p_syn.add_argument("--post", help="Only this post slug (default: all new online posts)")
 
@@ -67,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  skipped   {slug} (already syndicated)")
         for slug in report.skipped_no_header:
             print(f"  no-header {slug} (add a header:: image)")
+        if report.hugo_pulled:
+            print(f"  hugo      pulled into {cfg.hugo_content_dir}")
         for slug, reason in report.failed:
             print(f"  FAILED    {slug}: {reason}")
         return 1 if report.failed else 0

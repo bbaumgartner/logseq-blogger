@@ -27,7 +27,15 @@ def make_cfg(tmp_path: Path) -> Config:
             },
         }
     )
-    local = LocalConfig(logseq_dir=logseq, sftp_key=tmp_path / "sftp_key")
+    hugo = tmp_path / "hugo"
+    (hugo / "content").mkdir(parents=True)
+    local = LocalConfig(
+        logseq_dir=logseq,
+        sftp_key=tmp_path / "sftp_key",
+        hugo_dir=hugo,
+        hugo_pull_timeout_sec=5,
+        hugo_pull_poll_sec=0,
+    )
     return Config(shared=shared, local=local, repo_root=tmp_path)
 
 
