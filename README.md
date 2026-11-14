@@ -137,7 +137,7 @@ uv sync
 cp config.local.yaml.example config.local.yaml       # paths, hugo_dir, SFTP host, webhook URLs
 ```
 
-Local settings in `config.local.yaml` include `logseq_dir`, `hugo_dir` (Hugo project root that receives the pulled `content/`), `sftp_key`, site URL, SFTP staging, and webhook URLs. Optional `hugo_pull_timeout_sec` (default 3600) and `hugo_pull_poll_sec` (default 15) control how long `syndicate` waits for Hugo indexes on SFTP.
+Local settings in `config.local.yaml` include `logseq_dir`, `hugo_dir` (Hugo project root that receives the pulled `content/`), `sftp_key`, site URL, SFTP staging, and webhook URLs. Optional `hugo_pull_timeout_sec` (default 3600) and `hugo_pull_poll_sec` (default 15) control how long `syndicate` waits for Hugo content on SFTP. A post is considered ready only after all `index.*.md` files exist, no `*.encoding` video sidecars remain, and the post bundle file sizes stay unchanged for one full poll interval (so a redeploy cannot pull a half-written MP4).
 
 ## Test
 

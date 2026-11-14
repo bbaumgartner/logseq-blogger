@@ -14,6 +14,7 @@ from logseq_blogger.marker import is_syndicated
 from logseq_blogger.trigger import (
     HUGO_INDEX_LANGS,
     hugo_index_paths,
+    hugo_post_bundle_sizes,
     hugo_post_ready,
     pull_hugo_content,
     syndicate,
@@ -26,6 +27,7 @@ from conftest import create_dummy_assets, make_cfg
 class _Attr:
     filename: str
     st_mode: int
+    st_size: int = 0
 
 
 class FakeSftp:
@@ -49,7 +51,8 @@ class FakeSftp:
         out: list[_Attr] = []
         for path in self._local(remote).iterdir():
             mode = stat.S_IFDIR | 0o755 if path.is_dir() else stat.S_IFREG | 0o644
-            out.append(_Attr(filename=path.name, st_mode=mode))
+            size = 0 if path.is_dir() else path.stat().st_size
+            out.append(_Attr(filename=path.name, st_mode=mode, st_size=size))
         return out
 
     def download(self, remote_path: str, local_path: Path) -> None:
@@ -94,6 +97,23 @@ def test_hugo_post_ready_requires_all_langs(tmp_path: Path):
     assert hugo_post_ready(sftp, cfg, slug)
 
 
+def test_hugo_post_ready_blocks_on_encoding_sidecar(tmp_path: Path):
+    cfg = make_cfg(tmp_path)
+    remote = tmp_path / "remote"
+    slug = "2026-06-03_Athen"
+    _seed_indexes(remote, "/syndicator", slug)
+    post = remote / "syndicator" / "hugo-site" / "content" / "posts" / slug
+    (post / "clip.mp4.encoding").write_bytes(b"partial")
+    sftp = FakeSftp(remote)
+    assert hugo_post_bundle_sizes(sftp, cfg, slug) is None
+    assert not hugo_post_ready(sftp, cfg, slug)
+
+    (post / "clip.mp4.encoding").unlink()
+    (post / "clip.mp4").write_bytes(b"done")
+    assert hugo_post_ready(sftp, cfg, slug)
+    assert hugo_post_bundle_sizes(sftp, cfg, slug)["clip.mp4"] == 4
+
+
 def test_wait_for_hugo_posts_succeeds(tmp_path: Path, monkeypatch):
     cfg = make_cfg(tmp_path)
     cfg.local.hugo_pull_timeout_sec = 10
@@ -111,7 +131,34 @@ def test_wait_for_hugo_posts_succeeds(tmp_path: Path, monkeypatch):
     monkeypatch.setattr("logseq_blogger.trigger.time.sleep", fake_sleep)
     wait_for_hugo_posts(sftp, cfg, [slug])
     assert hugo_post_ready(sftp, cfg, slug)
-    assert sleeps
+    # One sleep to seed indexes, one more for the size-stability confirmation.
+    assert len(sleeps) >= 2
+
+
+def test_wait_for_hugo_posts_waits_while_bundle_grows(tmp_path: Path, monkeypatch):
+    cfg = make_cfg(tmp_path)
+    cfg.local.hugo_pull_timeout_sec = 10
+    cfg.local.hugo_pull_poll_sec = 0
+    remote = tmp_path / "remote"
+    slug = "2026-06-03_Athen"
+    _seed_indexes(remote, "/syndicator", slug)
+    post = remote / "syndicator" / "hugo-site" / "content" / "posts" / slug
+    video = post / "clip.mp4"
+    video.write_bytes(b"a")
+    sftp = FakeSftp(remote)
+    sleeps: list[float] = []
+
+    def fake_sleep(_seconds):
+        sleeps.append(_seconds)
+        if len(sleeps) == 1:
+            video.write_bytes(b"aa")
+        elif len(sleeps) == 2:
+            video.write_bytes(b"aaa")
+
+    monkeypatch.setattr("logseq_blogger.trigger.time.sleep", fake_sleep)
+    wait_for_hugo_posts(sftp, cfg, [slug])
+    assert len(sleeps) >= 3
+    assert video.read_bytes() == b"aaa"
 
 
 def test_wait_for_hugo_posts_timeout(tmp_path: Path, monkeypatch):

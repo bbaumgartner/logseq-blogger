@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import shutil
+import stat
 import tempfile
 import time
 import unicodedata
@@ -32,6 +33,9 @@ _KEEP_CHARS = set("-._")
 
 # Languages n8n writes under hugo-site/content/posts/<slug>/index.<lang>.md
 HUGO_INDEX_LANGS = ("en", "de", "es", "fr", "it", "arrr")
+
+# Adapt Hugo Media encodes to ``<name>.mp4.encoding`` then renames into place.
+HUGO_ENCODING_SUFFIX = ".encoding"
 
 
 # --- URL helpers -------------------------------------------------------------
@@ -127,8 +131,39 @@ def hugo_index_paths(cfg: Config, slug: str) -> list[str]:
     return [f"{root}/index.{lang}.md" for lang in HUGO_INDEX_LANGS]
 
 
-def hugo_post_ready(sftp: SftpUploader, cfg: Config, slug: str) -> bool:
+def hugo_indexes_present(sftp: SftpUploader, cfg: Config, slug: str) -> bool:
     return all(sftp.exists(path) for path in hugo_index_paths(cfg, slug))
+
+
+def hugo_post_bundle_sizes(sftp: SftpUploader, cfg: Config, slug: str) -> dict[str, int] | None:
+    """Return ``filename -> size`` for the post bundle, or ``None`` if not pullable yet.
+
+    Not pullable while any index is missing or an ``*.encoding`` sidecar exists
+    (n8n still writing a video).
+    """
+    if not hugo_indexes_present(sftp, cfg, slug):
+        return None
+    root = hugo_post_remote(cfg, slug)
+    try:
+        entries = sftp.listdir_attr(root)
+    except FileNotFoundError:
+        return None
+    sizes: dict[str, int] = {}
+    for entry in entries:
+        name = entry.filename
+        if name in (".", ".."):
+            continue
+        if name.endswith(HUGO_ENCODING_SUFFIX):
+            return None
+        if not stat.S_ISREG(entry.st_mode):
+            continue
+        sizes[name] = int(entry.st_size)
+    return sizes
+
+
+def hugo_post_ready(sftp: SftpUploader, cfg: Config, slug: str) -> bool:
+    """True when indexes exist and no in-progress encode sidecars are present."""
+    return hugo_post_bundle_sizes(sftp, cfg, slug) is not None
 
 
 # --- Payload builders --------------------------------------------------------
@@ -281,13 +316,20 @@ def _check_webhooks(cfg: Config, *, need_reel: bool) -> None:
 
 
 def wait_for_hugo_posts(sftp: SftpUploader, cfg: Config, slugs: list[str]) -> None:
-    """Poll SFTP until every slug has all Hugo index.*.md files, or time out."""
+    """Poll SFTP until every slug's Hugo bundle is complete and size-stable.
+
+    Ready means: all ``index.*.md`` files exist, no ``*.encoding`` sidecars, and
+    the post directory's file sizes match the previous poll. That avoids pulling
+    while ffmpeg is still rewriting a video into an already-indexed post folder
+    (redeploys keep old indexes around).
+    """
     if not slugs:
         return
     timeout = cfg.local.hugo_pull_timeout_sec
     poll = cfg.local.hugo_pull_poll_sec
     deadline = time.monotonic() + timeout
     pending = set(slugs)
+    prev_sizes: dict[str, dict[str, int]] = {}
     log.info(
         "waiting for Hugo site on SFTP for %d post(s) (timeout %ds, poll %ds)",
         len(pending),
@@ -295,7 +337,18 @@ def wait_for_hugo_posts(sftp: SftpUploader, cfg: Config, slugs: list[str]) -> No
         poll,
     )
     while pending:
-        ready = {slug for slug in pending if hugo_post_ready(sftp, cfg, slug)}
+        ready: set[str] = set()
+        for slug in pending:
+            sizes = hugo_post_bundle_sizes(sftp, cfg, slug)
+            if sizes is None:
+                prev_sizes.pop(slug, None)
+                continue
+            if prev_sizes.get(slug) == sizes:
+                ready.add(slug)
+            else:
+                if slug in prev_sizes:
+                    log.info("Hugo post %s still changing — waiting for stable bundle", slug)
+                prev_sizes[slug] = sizes
         if ready:
             for slug in sorted(ready):
                 log.info("Hugo post ready: %s", slug)
