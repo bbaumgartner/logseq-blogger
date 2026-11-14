@@ -214,3 +214,35 @@ def test_two_blog_branches_in_one_journal(tmp_path: Path):
     posts = extract_posts(journal)
     assert [p.meta.title for p in posts] == ["Erster", "Zweiter"]
     assert [p.blocks[0].raw for p in posts] == ["Text eins.", "Text zwei."]
+
+
+def test_media_filename_with_parentheses(tmp_path: Path):
+    name = "Young_Albanian_being_chased_by_a_Turk_(Dance_of_Zalongo)_1.png"
+    journals = tmp_path / "journals"
+    assets = tmp_path / "assets"
+    journals.mkdir()
+    assets.mkdir()
+    (assets / name).write_bytes(b"png")
+    journal = journals / "2026_01_04.md"
+    journal.write_text(
+        "- [[Blog]]\n"
+        "\t- type:: blog\n"
+        "\t  status:: online\n"
+        "\t  language:: german\n"
+        "\t  date:: 2026-01-04\n"
+        "\t  title:: Parens\n"
+        f"\t  header:: ![h_(x).jpg](../assets/{name})\n"
+        f"\t- ![{name}](../assets/{name})\n",
+        encoding="utf-8",
+    )
+    posts = extract_posts(journal)
+    assert len(posts) == 1
+    post = posts[0]
+    assert post.header_media is not None
+    assert post.header_media.filename == name
+    assert post.header_media.exists
+    assert len(post.blocks) == 1
+    assert post.blocks[0].kind == "media"
+    assert post.blocks[0].media is not None
+    assert post.blocks[0].media.filename == name
+    assert post.blocks[0].media.exists

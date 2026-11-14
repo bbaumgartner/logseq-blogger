@@ -37,3 +37,23 @@ def test_transform_content_keeps_source_filenames():
 def test_transform_content_youtube_shortcode():
     content = "{{video https://youtu.be/FAIZtHHsbSM}}"
     assert transform_content(content) == "{{< youtube FAIZtHHsbSM >}}"
+
+
+def test_asset_path_with_parentheses_in_filename(tmp_path: Path):
+    name = "Young_Albanian_being_chased_by_a_Turk_(Dance_of_Zalongo)_1794392035253_0.png"
+    journals = tmp_path / "journals"
+    assets = tmp_path / "assets"
+    journals.mkdir()
+    assets.mkdir()
+    (assets / name).write_bytes(b"png")
+    content = f"![alt_(x).png](../assets/{name})"
+
+    adapted = transform_content(content)
+    assert adapted == f"![alt_(x).png]({name})"
+
+    copies = collect_asset_copies(content, journals)
+    assert len(copies) == 1
+    src, basename = copies[0]
+    assert basename == name
+    assert src == (assets / name).resolve()
+    assert src.exists()

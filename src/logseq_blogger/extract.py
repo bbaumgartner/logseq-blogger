@@ -30,13 +30,17 @@ BlockKind = Literal["title", "media", "youtube", "text"]
 BULLET_RE = re.compile(r"^(\t*)-(?: (.*))?$")
 PROP_RE = re.compile(r"(\w+)::\s*(.*)")
 ROOT_PROP_RE = re.compile(r"^\w+::\s*")
-MEDIA_FIRST_LINE_RE = re.compile(r"^!\[(.*?)\]\(([^)]*?)\)(?:\{[^}]*\})?\s*$")
+# Path may contain one level of nested (...), e.g. foo_(bar)_123.png
+_PATH_WITH_PARENS = r"(?:[^()]|\([^()]*\))*"
+MEDIA_FIRST_LINE_RE = re.compile(
+    rf"^!\[([^\]]*)\]\(({_PATH_WITH_PARENS})\)(?:\{{[^}}]*\}})?\s*$"
+)
 YOUTUBE_FIRST_LINE_RE = re.compile(r"^\{\{video\s+(https?://[^\s}]+)\s*\}\}\s*$")
 YOUTUBE_ID_RE = re.compile(r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]+)")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
-PAREN_PATH_RE = re.compile(r"\((.*?)\)")
-INLINE_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
-INLINE_LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
+PAREN_PATH_RE = re.compile(rf"\(({_PATH_WITH_PARENS})\)")
+INLINE_IMAGE_RE = re.compile(rf"!\[([^\]]*)\]\(({_PATH_WITH_PARENS})\)")
+INLINE_LINK_RE = re.compile(rf"(?<!!)\[([^\]]*)\]\(({_PATH_WITH_PARENS})\)")
 BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
 ITALIC_RE = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)")
 
@@ -256,6 +260,9 @@ def _classify_block(out_lines: list[str], source_path: Path) -> Block:
 
 
 def _extract_path(raw: str) -> str:
+    m = INLINE_IMAGE_RE.search(raw)
+    if m is not None:
+        return m.group(2)
     m = PAREN_PATH_RE.search(raw)
     return m.group(1) if m else raw
 

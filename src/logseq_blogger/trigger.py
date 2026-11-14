@@ -20,7 +20,10 @@ from .webhook import WebhookError, post_webhook
 
 log = logging.getLogger(__name__)
 
-ASSET_RE = re.compile(r"!\[(.*?)\]\((.*?assets/)(.*?)\)(?:\{[^}]*\})?")
+# Filename may contain one level of nested (...), e.g. foo_(bar)_123.png
+ASSET_RE = re.compile(
+    r"!\[([^\]]*)\]\((.*?assets/)((?:[^()]|\([^()]*\))*)\)(?:\{[^}]*\})?"
+)
 LOGSEQ_VIDEO_RE = re.compile(r"\{\{video\s+(https?://[^\s}]+)\s*\}\}")
 YOUTUBE_ID_RE = re.compile(r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]+)")
 
