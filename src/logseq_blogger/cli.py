@@ -74,8 +74,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if report.failed else 0
 
     if args.command == "redeploy":
-        redeploy(cfg, slug=args.post)
+        report = redeploy(cfg, slug=args.post)
         print(f"  redeploy  {args.post} (site rebuild handed off)")
+        if report.hugo_pulled:
+            print(f"  hugo      pulled into {cfg.hugo_content_dir}")
+        if report.error:
+            print(f"  FAILED    hugo-pull: {report.error}")
+            return 1
         return 0
 
     return 1

@@ -16,7 +16,9 @@ from logseq_blogger.trigger import (
     hugo_index_paths,
     hugo_post_bundle_sizes,
     hugo_post_ready,
+    hugo_index_mtimes,
     pull_hugo_content,
+    redeploy,
     syndicate,
     wait_for_hugo_posts,
 )
@@ -28,6 +30,7 @@ class _Attr:
     filename: str
     st_mode: int
     st_size: int = 0
+    st_mtime: int = 0
 
 
 class FakeSftp:
@@ -52,7 +55,8 @@ class FakeSftp:
         for path in self._local(remote).iterdir():
             mode = stat.S_IFDIR | 0o755 if path.is_dir() else stat.S_IFREG | 0o644
             size = 0 if path.is_dir() else path.stat().st_size
-            out.append(_Attr(filename=path.name, st_mode=mode, st_size=size))
+            mtime = path.stat().st_mtime_ns
+            out.append(_Attr(filename=path.name, st_mode=mode, st_size=size, st_mtime=mtime))
         return out
 
     def download(self, remote_path: str, local_path: Path) -> None:
@@ -272,3 +276,90 @@ def test_syndicate_hugo_pull_failure_keeps_done(tmp_path: Path, monkeypatch):
     assert not report.hugo_pulled
     assert report.failed == [("hugo-pull", "still building")]
     assert is_syndicated(target)
+
+
+def test_wait_for_hugo_posts_ignores_stale_bundle_until_rewritten(tmp_path: Path, monkeypatch):
+    cfg = make_cfg(tmp_path)
+    cfg.local.hugo_pull_timeout_sec = 10
+    cfg.local.hugo_pull_poll_sec = 0
+    remote = tmp_path / "remote"
+    slug = "2026-06-03_Athen"
+    _seed_indexes(remote, "/syndicator", slug)
+    sftp = FakeSftp(remote)
+    baseline = hugo_index_mtimes(sftp, cfg, slug)
+    assert len(baseline) == len(HUGO_INDEX_LANGS)
+    sleeps: list[float] = []
+
+    def fake_sleep(_seconds):
+        sleeps.append(_seconds)
+        if len(sleeps) == 3:
+            import os
+
+            post = remote / "syndicator" / "hugo-site" / "content" / "posts" / slug
+            for idx in post.glob("index.*.md"):
+                st = idx.stat()
+                os.utime(idx, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+
+    monkeypatch.setattr("logseq_blogger.trigger.time.sleep", fake_sleep)
+    wait_for_hugo_posts(sftp, cfg, [slug], baselines={slug: baseline})
+    # Two polls on the stale bundle, rewrite, then one more for size stability.
+    assert len(sleeps) >= 4
+
+
+def test_redeploy_pulls_hugo_with_baseline(tmp_path: Path, monkeypatch):
+    cfg = make_cfg(tmp_path)
+    posts = scan_blog_posts(cfg.journals_dir, cfg.pages_dir, online_only=True)
+    create_dummy_assets(posts)
+    target = next(p for p in posts if p.slug == "2026-06-03_Athen")
+    remote = tmp_path / "remote"
+    _seed_indexes(remote, "/syndicator", target.slug)
+
+    class _UploadSftp(FakeSftp):
+        def upload(self, local, remote):
+            return None
+
+    @contextmanager
+    def fake_session(_cfg):
+        yield _UploadSftp(remote)
+
+    pulled: list = []
+    monkeypatch.setattr("logseq_blogger.trigger.sftp_session", fake_session)
+    monkeypatch.setattr("logseq_blogger.trigger.post_webhook", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "logseq_blogger.trigger.pull_hugo_content",
+        lambda config, slugs, baselines=None: pulled.append((list(slugs), baselines)) or 1,
+    )
+    monkeypatch.setattr("logseq_blogger.trigger._scan_online", lambda config: [target])
+
+    report = redeploy(cfg, slug=target.slug)
+    assert report.hugo_pulled
+    assert not report.error
+    assert pulled[0][0] == [target.slug]
+    assert len(pulled[0][1][target.slug]) == len(HUGO_INDEX_LANGS)
+
+
+def test_redeploy_hugo_pull_failure_reported(tmp_path: Path, monkeypatch):
+    cfg = make_cfg(tmp_path)
+    posts = scan_blog_posts(cfg.journals_dir, cfg.pages_dir, online_only=True)
+    create_dummy_assets(posts)
+    target = next(p for p in posts if p.slug == "2026-06-03_Athen")
+
+    class _UploadSftp(FakeSftp):
+        def upload(self, local, remote):
+            return None
+
+    @contextmanager
+    def fake_session(_cfg):
+        yield _UploadSftp(tmp_path / "remote")
+
+    monkeypatch.setattr("logseq_blogger.trigger.sftp_session", fake_session)
+    monkeypatch.setattr("logseq_blogger.trigger.post_webhook", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "logseq_blogger.trigger.pull_hugo_content",
+        lambda config, slugs, baselines=None: (_ for _ in ()).throw(TimeoutError("slow")),
+    )
+    monkeypatch.setattr("logseq_blogger.trigger._scan_online", lambda config: [target])
+
+    report = redeploy(cfg, slug=target.slug)
+    assert not report.hugo_pulled
+    assert report.error == "slow"

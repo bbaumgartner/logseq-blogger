@@ -161,6 +161,24 @@ def hugo_post_bundle_sizes(sftp: SftpUploader, cfg: Config, slug: str) -> dict[s
     return sizes
 
 
+def hugo_index_mtimes(sftp: SftpUploader, cfg: Config, slug: str) -> dict[str, int]:
+    """Return ``index.*.md -> mtime`` for the post bundle (empty if missing).
+
+    Used by redeploy as a baseline so the wait does not accept the stale
+    bundle that is still on SFTP from the previous build.
+    """
+    try:
+        entries = sftp.listdir_attr(hugo_post_remote(cfg, slug))
+    except FileNotFoundError:
+        return {}
+    wanted = {f"index.{lang}.md" for lang in HUGO_INDEX_LANGS}
+    return {
+        e.filename: int(getattr(e, "st_mtime", 0) or 0)
+        for e in entries
+        if e.filename in wanted
+    }
+
+
 def hugo_post_ready(sftp: SftpUploader, cfg: Config, slug: str) -> bool:
     """True when indexes exist and no in-progress encode sidecars are present."""
     return hugo_post_bundle_sizes(sftp, cfg, slug) is not None
@@ -315,14 +333,24 @@ def _check_webhooks(cfg: Config, *, need_reel: bool) -> None:
         raise SystemExit("webhooks.reel_url is not configured in logseq_blogger.yaml")
 
 
-def wait_for_hugo_posts(sftp: SftpUploader, cfg: Config, slugs: list[str]) -> None:
+def wait_for_hugo_posts(
+    sftp: SftpUploader,
+    cfg: Config,
+    slugs: list[str],
+    baselines: dict[str, dict[str, int]] | None = None,
+) -> None:
     """Poll SFTP until every slug's Hugo bundle is complete and size-stable.
 
     Ready means: all ``index.*.md`` files exist, no ``*.encoding`` sidecars, and
     the post directory's file sizes match the previous poll. That avoids pulling
     while ffmpeg is still rewriting a video into an already-indexed post folder
     (redeploys keep old indexes around).
+
+    ``baselines`` maps slug -> :func:`hugo_index_mtimes` taken before the
+    webhook fired; such a slug is only accepted once every index mtime differs
+    from its baseline (i.e. n8n has rewritten the bundle).
     """
+    baselines = {k: v for k, v in (baselines or {}).items() if v}
     if not slugs:
         return
     timeout = cfg.local.hugo_pull_timeout_sec
@@ -339,6 +367,15 @@ def wait_for_hugo_posts(sftp: SftpUploader, cfg: Config, slugs: list[str]) -> No
     while pending:
         ready: set[str] = set()
         for slug in pending:
+            if slug in baselines:
+                current = hugo_index_mtimes(sftp, cfg, slug)
+                old = baselines[slug]
+                if len(current) < len(HUGO_INDEX_LANGS) or any(
+                    current.get(name) == mtime for name, mtime in old.items()
+                ):
+                    continue
+                log.info("Hugo post %s rewritten — waiting for stable bundle", slug)
+                del baselines[slug]
             sizes = hugo_post_bundle_sizes(sftp, cfg, slug)
             if sizes is None:
                 prev_sizes.pop(slug, None)
@@ -363,14 +400,18 @@ def wait_for_hugo_posts(sftp: SftpUploader, cfg: Config, slugs: list[str]) -> No
         time.sleep(max(poll, 0))
 
 
-def pull_hugo_content(cfg: Config, slugs: list[str]) -> int:
+def pull_hugo_content(
+    cfg: Config,
+    slugs: list[str],
+    baselines: dict[str, dict[str, int]] | None = None,
+) -> int:
     """Wait for ``slugs`` on SFTP, then overlay hugo-site/content/ into hugo_dir/content/."""
     if not cfg.local.hugo_dir:
         raise SystemExit("hugo_dir is not configured in config.local.yaml")
     remote = hugo_content_remote(cfg)
     local = cfg.hugo_content_dir
     with sftp_session(cfg) as sftp:
-        wait_for_hugo_posts(sftp, cfg, slugs)
+        wait_for_hugo_posts(sftp, cfg, slugs, baselines)
         if not sftp.exists(remote):
             raise FileNotFoundError(f"remote Hugo content missing: {remote}")
         log.info("pulling %s -> %s", remote, local)
@@ -497,7 +538,13 @@ def _syndicate_one(
         report.failed.append((slug, str(err)))
 
 
-def redeploy(cfg: Config, slug: str) -> None:
+@dataclass
+class RedeployReport:
+    hugo_pulled: bool = False
+    error: str = ""
+
+
+def redeploy(cfg: Config, slug: str) -> RedeployReport:
     _check_webhooks(cfg, need_reel=False)
     posts = {p.slug: p for p in _scan_online(cfg)}
     if slug not in posts:
@@ -513,6 +560,7 @@ def redeploy(cfg: Config, slug: str) -> None:
 
         with sftp_session(cfg) as sftp:
             _upload_all(sftp, staged)
+            baseline = hugo_index_mtimes(sftp, cfg, slug)
             post_webhook(
                 cfg.shared.webhooks.publish_url,
                 {
@@ -535,3 +583,15 @@ def redeploy(cfg: Config, slug: str) -> None:
             )
 
     log.info("redeploy %s: site rebuild handed off (no social, no marker)", slug)
+
+    report = RedeployReport()
+    try:
+        pull_hugo_content(cfg, [slug], baselines={slug: baseline})
+        report.hugo_pulled = True
+    except (TimeoutError, OSError, FileNotFoundError) as err:
+        log.error(
+            "Hugo pull failed after redeploy — %s (pull hugo-site/content/ by hand if needed)",
+            err,
+        )
+        report.error = str(err)
+    return report

@@ -6,7 +6,7 @@ from logseq_blogger import __version__
 from logseq_blogger.cli import main
 from logseq_blogger.extract import scan_blog_posts
 from logseq_blogger.marker import set_syndicated_at
-from logseq_blogger.trigger import SyndicateReport
+from logseq_blogger.trigger import RedeployReport, SyndicateReport
 
 from conftest import make_cfg
 
@@ -86,10 +86,22 @@ def test_redeploy_invokes_pipeline(tmp_path: Path, monkeypatch, capsys):
     seen = {}
     monkeypatch.setattr(
         "logseq_blogger.trigger.redeploy",
-        lambda config, slug: seen.setdefault("slug", slug),
+        lambda config, slug: seen.setdefault("slug", slug) and RedeployReport(hugo_pulled=True),
     )
     assert main(["redeploy", "--post", "2026-06-03_Athen"]) == 0
     assert seen["slug"] == "2026-06-03_Athen"
+    assert "hugo      pulled into" in capsys.readouterr().out
+
+
+def test_redeploy_hugo_failure_exits_nonzero(tmp_path: Path, monkeypatch, capsys):
+    cfg = make_cfg(tmp_path)
+    monkeypatch.setattr("logseq_blogger.config.load_config", lambda repo_root=None: cfg)
+    monkeypatch.setattr(
+        "logseq_blogger.trigger.redeploy",
+        lambda config, slug: RedeployReport(error="timed out"),
+    )
+    assert main(["redeploy", "--post", "2026-06-03_Athen"]) == 1
+    assert "FAILED    hugo-pull: timed out" in capsys.readouterr().out
 
 
 def test_list_shows_slugs_and_syndicated_dates(tmp_path: Path, monkeypatch, capsys):

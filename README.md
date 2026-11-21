@@ -25,7 +25,7 @@ uv run logseq-blogger redeploy --post <slug>    # regenerate the static hugo pag
 uv run logseq-blogger version                   # print version
 ```
 
-`syndicate` uploads source media, fires the Syndicator webhooks, writes `syndicated-at::`, then waits for n8n to finish the Hugo bundle on SFTP and overlays `{base}/hugo-site/content/` into `{hugo_dir}/content/` (see `config.local.yaml`). If the wait is cancelled or times out, markers stay set — pull the remote content by hand if needed. `redeploy` does not wait or pull.
+`syndicate` uploads source media, fires the Syndicator webhooks, writes `syndicated-at::`, then waits for n8n to finish the Hugo bundle on SFTP and overlays `{base}/hugo-site/content/` into `{hugo_dir}/content/` (see `config.local.yaml`). If the wait is cancelled or times out, markers stay set — pull the remote content by hand if needed. `redeploy` does the same wait-and-pull after `/publish`; since the old bundle is still on SFTP, it first waits until n8n has rewritten every `index.*.md` (mtime changed) before checking size stability.
 
 ## logseq-blog interface
 
@@ -137,7 +137,7 @@ uv sync
 cp config.local.yaml.example config.local.yaml       # paths, hugo_dir, SFTP host, webhook URLs
 ```
 
-Local settings in `config.local.yaml` include `logseq_dir`, `hugo_dir` (Hugo project root that receives the pulled `content/`), `sftp_key`, site URL, SFTP staging, and webhook URLs. Optional `hugo_pull_timeout_sec` (default 3600) and `hugo_pull_poll_sec` (default 15) control how long `syndicate` waits for Hugo content on SFTP. A post is considered ready only after all `index.*.md` files exist, no `*.encoding` video sidecars remain, and the post bundle file sizes stay unchanged for one full poll interval (so a redeploy cannot pull a half-written MP4).
+Local settings in `config.local.yaml` include `logseq_dir`, `hugo_dir` (Hugo project root that receives the pulled `content/`), `sftp_key`, site URL, SFTP staging, and webhook URLs. Optional `hugo_pull_timeout_sec` (default 3600) and `hugo_pull_poll_sec` (default 15) control how long `syndicate` and `redeploy` wait for Hugo content on SFTP. A post is considered ready only after all `index.*.md` files exist, no `*.encoding` video sidecars remain, and the post bundle file sizes stay unchanged for one full poll interval (so a redeploy cannot pull a half-written MP4).
 
 ## Test
 
